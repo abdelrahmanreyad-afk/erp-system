@@ -16,8 +16,9 @@ type Product = {
 };
 
 type Variant = {
-  id: string; // MANUAL ID (PRIMARY KEY LOGICALLY)
+  id: string;
   sku?: string;
+  name: string;
   productId: string;
   type: "qty" | "serial";
   qty?: number;
@@ -27,8 +28,11 @@ type Variant = {
 export default function VariantsPage() {
   const [id, setId] = useState("");
   const [sku, setSku] = useState("");
+  const [name, setName] = useState("");
+
   const [productId, setProductId] = useState("");
   const [type, setType] = useState<"qty" | "serial" | "">("");
+
   const [qty, setQty] = useState<number>(0);
   const [serialInput, setSerialInput] = useState("");
 
@@ -38,7 +42,7 @@ export default function VariantsPage() {
   const productsRef = collection(db, "products");
   const variantsRef = collection(db, "variants");
 
-  // 📥 fetch products + variants
+  // 📥 Fetch
   const fetchAll = async () => {
     const [pSnap, vSnap] = await Promise.all([
       getDocs(productsRef),
@@ -66,29 +70,27 @@ export default function VariantsPage() {
 
   // ➕ Add Variant
   const addVariant = async () => {
-    if (!id || !productId || !type) return;
+    if (!id || !productId || !type || !name) return;
 
-    let serials: string[] = [];
-
-    if (type === "serial") {
-      serials = serialInput
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
+    const serials =
+      type === "serial"
+        ? serialInput.split("\n").map((s) => s.trim()).filter(Boolean)
+        : [];
 
     await addDoc(variantsRef, {
-      id, // MANUAL ID stored
-      sku,
+      id,        // manual ID (PRIMARY)
+      sku,       // manual SKU
+      name,      // X6 - Rosegold
       productId,
       type,
       qty: type === "qty" ? qty : 0,
-      serials: type === "serial" ? serials : [],
+      serials,
       createdAt: new Date(),
     });
 
     setId("");
     setSku("");
+    setName("");
     setProductId("");
     setType("");
     setQty(0);
@@ -105,27 +107,32 @@ export default function VariantsPage() {
 
   return (
     <div>
-      <h1>📦 Variants (Core Engine)</h1>
+      <h1>📦 Variants</h1>
 
       {/* FORM */}
       <div style={{ marginBottom: 20 }}>
-        {/* Manual ID */}
+
         <input
           value={id}
           onChange={(e) => setId(e.target.value)}
-          placeholder="Variant ID (MANUAL)"
+          placeholder="Variant ID (manual)"
           style={{ padding: 8, marginRight: 10 }}
         />
 
-        {/* SKU */}
         <input
           value={sku}
           onChange={(e) => setSku(e.target.value)}
-          placeholder="SKU (optional)"
+          placeholder="SKU (manual)"
           style={{ padding: 8, marginRight: 10 }}
         />
 
-        {/* Product */}
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Variant Name (X6 - Rosegold)"
+          style={{ padding: 8, marginRight: 10 }}
+        />
+
         <select
           value={productId}
           onChange={(e) => setProductId(e.target.value)}
@@ -139,7 +146,6 @@ export default function VariantsPage() {
           ))}
         </select>
 
-        {/* Type */}
         <select
           value={type}
           onChange={(e) => setType(e.target.value as any)}
@@ -161,13 +167,13 @@ export default function VariantsPage() {
           />
         )}
 
-        {/* Serial Input */}
+        {/* Serial */}
         {type === "serial" && (
           <textarea
             value={serialInput}
             onChange={(e) => setSerialInput(e.target.value)}
-            placeholder="Enter serials (one per line)"
-            style={{ padding: 8, marginRight: 10, width: 200, height: 80 }}
+            placeholder="Serials (one per line)"
+            style={{ padding: 8, marginRight: 10, width: 220, height: 80 }}
           />
         )}
 
@@ -181,8 +187,10 @@ export default function VariantsPage() {
 
           return (
             <li key={v.id}>
-              <b>{v.id}</b> - {product?.name} - {v.type}{" "}
-              {v.type === "qty" ? `(${v.qty})` : `(${v.serials?.length})`}
+              <b>{v.name}</b> ({product?.name}) - {v.type}{" "}
+              {v.type === "qty"
+                ? `Qty: ${v.qty}`
+                : `Serials: ${v.serials?.length}`}
               <button onClick={() => deleteVariant(v.id)}>
                 Delete
               </button>

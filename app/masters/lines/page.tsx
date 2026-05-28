@@ -21,7 +21,6 @@ export default function LinesPage() {
 
   const linesRef = collection(db, "lines");
 
-  // 📥 Get Lines
   const fetchLines = async () => {
     const snapshot = await getDocs(linesRef);
 
@@ -37,7 +36,6 @@ export default function LinesPage() {
     fetchLines();
   }, []);
 
-  // ➕ Add Line
   const addLine = async () => {
     if (!name) return;
 
@@ -50,7 +48,6 @@ export default function LinesPage() {
     fetchLines();
   };
 
-  // ❌ Delete Line
   const deleteLine = async (id: string) => {
     await deleteDoc(doc(db, "lines", id));
     fetchLines();
@@ -60,25 +57,19 @@ export default function LinesPage() {
     <div>
       <h1>📦 Lines (Standalone)</h1>
 
-      {/* FORM */}
-      <div style={{ marginBottom: 20 }}>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Line name"
-          style={{ padding: 8, marginRight: 10 }}
-        />
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Line name"
+        style={{ padding: 8, marginRight: 10 }}
+      />
 
-        <button onClick={addLine}>
-          Add
-        </button>
-      </div>
+      <button onClick={addLine}>Add</button>
 
-      {/* LIST */}
       <ul>
         {lines.map((l) => (
           <li key={l.id}>
-            {l.name}{" "}
+            {l.name}
             <button onClick={() => deleteLine(l.id)}>
               Delete
             </button>

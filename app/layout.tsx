@@ -10,11 +10,8 @@ export default function RootLayout({
     <html lang="en">
       <body style={{ margin: 0 }}>
         <div style={{ display: "flex" }}>
-          
-          {/* Sidebar */}
           <Sidebar />
 
-          {/* Main Content */}
           <div
             style={{
               flex: 1,
@@ -25,7 +22,6 @@ export default function RootLayout({
           >
             {children}
           </div>
-
         </div>
       </body>
     </html>

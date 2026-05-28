@@ -16,13 +16,11 @@ type Product = {
 };
 
 type Variant = {
-  id: string;
+  id: string; // manual ID
   sku?: string;
-  name: string;
+  name: string; // X6 - Rosegold
   productId: string;
   type: "qty" | "serial";
-  qty?: number;
-  serials?: string[];
 };
 
 export default function VariantsPage() {
@@ -33,16 +31,13 @@ export default function VariantsPage() {
   const [productId, setProductId] = useState("");
   const [type, setType] = useState<"qty" | "serial" | "">("");
 
-  const [qty, setQty] = useState<number>(0);
-  const [serialInput, setSerialInput] = useState("");
-
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
 
   const productsRef = collection(db, "products");
   const variantsRef = collection(db, "variants");
 
-  // 📥 Fetch
+  // 📥 Fetch data
   const fetchAll = async () => {
     const [pSnap, vSnap] = await Promise.all([
       getDocs(productsRef),
@@ -68,23 +63,16 @@ export default function VariantsPage() {
     fetchAll();
   }, []);
 
-  // ➕ Add Variant
+  // ➕ Add Variant (DB ONLY)
   const addVariant = async () => {
-    if (!id || !productId || !type || !name) return;
-
-    const serials =
-      type === "serial"
-        ? serialInput.split("\n").map((s) => s.trim()).filter(Boolean)
-        : [];
+    if (!id || !name || !productId || !type) return;
 
     await addDoc(variantsRef, {
-      id,        // manual ID (PRIMARY)
-      sku,       // manual SKU
-      name,      // X6 - Rosegold
+      id,       // manual ID
+      sku,      // optional
+      name,     // X6 - Rosegold
       productId,
       type,
-      qty: type === "qty" ? qty : 0,
-      serials,
       createdAt: new Date(),
     });
 
@@ -93,8 +81,6 @@ export default function VariantsPage() {
     setName("");
     setProductId("");
     setType("");
-    setQty(0);
-    setSerialInput("");
 
     fetchAll();
   };
@@ -107,11 +93,10 @@ export default function VariantsPage() {
 
   return (
     <div>
-      <h1>📦 Variants</h1>
+      <h1>📦 Variants (Database Only)</h1>
 
       {/* FORM */}
       <div style={{ marginBottom: 20 }}>
-
         <input
           value={id}
           onChange={(e) => setId(e.target.value)}
@@ -122,7 +107,7 @@ export default function VariantsPage() {
         <input
           value={sku}
           onChange={(e) => setSku(e.target.value)}
-          placeholder="SKU (manual)"
+          placeholder="SKU (optional)"
           style={{ padding: 8, marginRight: 10 }}
         />
 
@@ -156,27 +141,6 @@ export default function VariantsPage() {
           <option value="serial">Serial</option>
         </select>
 
-        {/* Qty */}
-        {type === "qty" && (
-          <input
-            type="number"
-            value={qty}
-            onChange={(e) => setQty(Number(e.target.value))}
-            placeholder="Qty"
-            style={{ padding: 8, marginRight: 10 }}
-          />
-        )}
-
-        {/* Serial */}
-        {type === "serial" && (
-          <textarea
-            value={serialInput}
-            onChange={(e) => setSerialInput(e.target.value)}
-            placeholder="Serials (one per line)"
-            style={{ padding: 8, marginRight: 10, width: 220, height: 80 }}
-          />
-        )}
-
         <button onClick={addVariant}>Add</button>
       </div>
 
@@ -187,10 +151,7 @@ export default function VariantsPage() {
 
           return (
             <li key={v.id}>
-              <b>{v.name}</b> ({product?.name}) - {v.type}{" "}
-              {v.type === "qty"
-                ? `Qty: ${v.qty}`
-                : `Serials: ${v.serials?.length}`}
+              <b>{v.name}</b> ({product?.name}) - {v.type}
               <button onClick={() => deleteVariant(v.id)}>
                 Delete
               </button>

@@ -16,20 +16,18 @@ type Product = {
 };
 
 type Variant = {
-  id: string; // manual ID
-  sku?: string;
-  name: string; // X6 - Rosegold
+  id: string;
+  code: string;
+  sku: string;
+  name: string;
   productId: string;
-  type: "qty" | "serial";
 };
 
 export default function VariantsPage() {
-  const [id, setId] = useState("");
+  const [code, setCode] = useState("");
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
-
   const [productId, setProductId] = useState("");
-  const [type, setType] = useState<"qty" | "serial" | "">("");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
@@ -37,7 +35,7 @@ export default function VariantsPage() {
   const productsRef = collection(db, "products");
   const variantsRef = collection(db, "variants");
 
-  // 📥 Fetch data
+  // 📥 Fetch
   const fetchAll = async () => {
     const [pSnap, vSnap] = await Promise.all([
       getDocs(productsRef),
@@ -63,65 +61,59 @@ export default function VariantsPage() {
     fetchAll();
   }, []);
 
-  // ➕ Add Variant (DB ONLY)
+  // ➕ Add Variant
   const addVariant = async () => {
-    if (!id || !name || !productId || !type) return;
+    if (!code || !name || !productId) return;
 
     await addDoc(variantsRef, {
-      id,       // manual ID
-      sku,      // optional
-      name,     // X6 - Rosegold
+      code,
+      sku,
+      name,
       productId,
-      type,
       createdAt: new Date(),
     });
 
-    setId("");
+    setCode("");
     setSku("");
     setName("");
     setProductId("");
-    setType("");
 
     fetchAll();
   };
 
-  // ❌ Delete
-  const deleteVariant = async (docId: string) => {
-    await deleteDoc(doc(db, "variants", docId));
+  // ❌ Delete Variant (FIXED)
+  const deleteVariant = async (id: string) => {
+    await deleteDoc(doc(db, "variants", id));
     fetchAll();
   };
 
   return (
     <div>
-      <h1>📦 Variants (Database Only)</h1>
+      <h1>📦 Variants</h1>
 
       {/* FORM */}
       <div style={{ marginBottom: 20 }}>
         <input
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-          placeholder="Variant ID (manual)"
-          style={{ padding: 8, marginRight: 10 }}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Variant Code (RB-X6-RG)"
         />
 
         <input
           value={sku}
           onChange={(e) => setSku(e.target.value)}
-          placeholder="SKU (optional)"
-          style={{ padding: 8, marginRight: 10 }}
+          placeholder="SKU"
         />
 
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Variant Name (X6 - Rosegold)"
-          style={{ padding: 8, marginRight: 10 }}
+          placeholder="Variant Name"
         />
 
         <select
           value={productId}
           onChange={(e) => setProductId(e.target.value)}
-          style={{ padding: 8, marginRight: 10 }}
         >
           <option value="">Select Product</option>
           {products.map((p) => (
@@ -131,28 +123,24 @@ export default function VariantsPage() {
           ))}
         </select>
 
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as any)}
-          style={{ padding: 8, marginRight: 10 }}
-        >
-          <option value="">Type</option>
-          <option value="qty">Qty</option>
-          <option value="serial">Serial</option>
-        </select>
-
         <button onClick={addVariant}>Add</button>
       </div>
 
       {/* LIST */}
       <ul>
         {variants.map((v) => {
-          const product = products.find((p) => p.id === v.productId);
+          const product = products.find(
+            (p) => p.id === v.productId
+          )?.name;
 
           return (
             <li key={v.id}>
-              <b>{v.name}</b> ({product?.name}) - {v.type}
-              <button onClick={() => deleteVariant(v.id)}>
+              <b>{v.code}</b> - {v.name} ({product})
+
+              <button
+                onClick={() => deleteVariant(v.id)}
+                style={{ marginLeft: 10 }}
+              >
                 Delete
               </button>
             </li>

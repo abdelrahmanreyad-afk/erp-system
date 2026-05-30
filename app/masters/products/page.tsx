@@ -18,7 +18,6 @@ type Brand = {
 type Category = {
   id: string;
   name: string;
-  brandId: string;
 };
 
 type Line = {
@@ -52,7 +51,7 @@ export default function ProductsPage() {
   const linesRef = collection(db, "lines");
   const productsRef = collection(db, "products");
 
-  // 📥 Fetch all
+  // 📥 Fetch All
   const fetchAll = async () => {
     const [b, c, l, p] = await Promise.all([
       getDocs(brandsRef),
@@ -61,20 +60,43 @@ export default function ProductsPage() {
       getDocs(productsRef),
     ]);
 
-    setBrands(b.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
-    setCategories(c.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
-    setLines(l.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
-    setProducts(p.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+    setBrands(
+      b.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      }))
+    );
+
+    setCategories(
+      c.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      }))
+    );
+
+    setLines(
+      l.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      }))
+    );
+
+    setProducts(
+      p.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      }))
+    );
   };
 
   useEffect(() => {
     fetchAll();
   }, []);
 
-  // 🧠 Auto Code Generator
+  // 🔢 Auto Product Code
   const generateCode = () => {
     const next = products.length + 1;
-    return `PRD-${String(next).padStart(4, "0")}`;
+    return `P${String(next).padStart(4, "0")}`;
   };
 
   // ➕ Add Product
@@ -84,8 +106,8 @@ export default function ProductsPage() {
     const code = generateCode();
 
     await addDoc(productsRef, {
-      name,
       code,
+      name,
       brandId,
       categoryId,
       lineId,
@@ -96,19 +118,15 @@ export default function ProductsPage() {
     setBrandId("");
     setCategoryId("");
     setLineId("");
+
     fetchAll();
   };
 
-  // ❌ Delete
+  // ❌ Delete Product
   const deleteProduct = async (id: string) => {
     await deleteDoc(doc(db, "products", id));
     fetchAll();
   };
-
-  // Filters
-  const filteredCategories = categories.filter(
-    (c) => c.brandId === brandId
-  );
 
   return (
     <div>
@@ -119,20 +137,18 @@ export default function ProductsPage() {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Product name"
+          placeholder="Product Name"
           style={{ padding: 8, marginRight: 10 }}
         />
 
         {/* Brand */}
         <select
           value={brandId}
-          onChange={(e) => {
-            setBrandId(e.target.value);
-            setCategoryId("");
-          }}
+          onChange={(e) => setBrandId(e.target.value)}
           style={{ padding: 8, marginRight: 10 }}
         >
-          <option value="">Brand</option>
+          <option value="">Select Brand</option>
+
           {brands.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
@@ -146,8 +162,9 @@ export default function ProductsPage() {
           onChange={(e) => setCategoryId(e.target.value)}
           style={{ padding: 8, marginRight: 10 }}
         >
-          <option value="">Category</option>
-          {filteredCategories.map((c) => (
+          <option value="">Select Category</option>
+
+          {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -160,7 +177,8 @@ export default function ProductsPage() {
           onChange={(e) => setLineId(e.target.value)}
           style={{ padding: 8, marginRight: 10 }}
         >
-          <option value="">Line</option>
+          <option value="">Select Line</option>
+
           {lines.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
@@ -176,14 +194,32 @@ export default function ProductsPage() {
       {/* LIST */}
       <ul>
         {products.map((p) => {
-          const brand = brands.find((b) => b.id === p.brandId)?.name;
-          const category = categories.find((c) => c.id === p.categoryId)?.name;
-          const line = lines.find((l) => l.id === p.lineId)?.name;
+          const brand = brands.find(
+            (b) => b.id === p.brandId
+          )?.name;
+
+          const category = categories.find(
+            (c) => c.id === p.categoryId
+          )?.name;
+
+          const line = lines.find(
+            (l) => l.id === p.lineId
+          )?.name;
 
           return (
             <li key={p.id}>
-              {p.code} - {p.name} ({brand} / {category} / {line})
-              <button onClick={() => deleteProduct(p.id)}>
+              <b>{p.code}</b> - {p.name}
+              {" | "}
+              {brand}
+              {" / "}
+              {category}
+              {" / "}
+              {line}
+
+              <button
+                onClick={() => deleteProduct(p.id)}
+                style={{ marginLeft: 10 }}
+              >
                 Delete
               </button>
             </li>

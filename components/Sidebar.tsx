@@ -28,6 +28,12 @@ export default function Sidebar() {
       <h3 style={{ marginTop: 30 }}>Masters</h3>
 
       <div style={{ marginTop: 10 }}>
+  <Link href="/masters/locations" style={{ color: "white" }}>
+    Locations
+  </Link>
+</div>
+
+      <div style={{ marginTop: 10 }}>
         <Link href="/masters/brands" style={{ color: "white" }}>
           Brands
         </Link>
@@ -79,4 +85,5 @@ export default function Sidebar() {
       </div>
     </div>
   );
+  
 }

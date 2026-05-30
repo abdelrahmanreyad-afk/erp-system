@@ -5,9 +5,9 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   addDoc,
-  getDocs,
   deleteDoc,
   doc,
+  onSnapshot,
 } from "firebase/firestore";
 
 type Product = {
@@ -35,30 +35,30 @@ export default function VariantsPage() {
   const productsRef = collection(db, "products");
   const variantsRef = collection(db, "variants");
 
-  // 📥 Fetch
-  const fetchAll = async () => {
-    const [pSnap, vSnap] = await Promise.all([
-      getDocs(productsRef),
-      getDocs(variantsRef),
-    ]);
-
-    setProducts(
-      pSnap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as any),
-      }))
-    );
-
-    setVariants(
-      vSnap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as any),
-      }))
-    );
-  };
-
+  // 🔥 REAL TIME LISTENER (ERP STYLE)
   useEffect(() => {
-    fetchAll();
+    const unsubProducts = onSnapshot(productsRef, (snap) => {
+      setProducts(
+        snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }))
+      );
+    });
+
+    const unsubVariants = onSnapshot(variantsRef, (snap) => {
+      setVariants(
+        snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }))
+      );
+    });
+
+    return () => {
+      unsubProducts();
+      unsubVariants();
+    };
   }, []);
 
   // ➕ Add Variant
@@ -77,14 +77,15 @@ export default function VariantsPage() {
     setSku("");
     setName("");
     setProductId("");
-
-    fetchAll();
   };
 
-  // ❌ Delete Variant (FIXED)
+  // ❌ Delete Variant
   const deleteVariant = async (id: string) => {
-    await deleteDoc(doc(db, "variants", id));
-    fetchAll();
+    try {
+      await deleteDoc(doc(db, "variants", id));
+    } catch (error) {
+      console.error("Delete failed:", error);
+    }
   };
 
   return (
@@ -97,23 +98,27 @@ export default function VariantsPage() {
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="Variant Code (RB-X6-RG)"
+          style={{ marginRight: 8 }}
         />
 
         <input
           value={sku}
           onChange={(e) => setSku(e.target.value)}
           placeholder="SKU"
+          style={{ marginRight: 8 }}
         />
 
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Variant Name"
+          style={{ marginRight: 8 }}
         />
 
         <select
           value={productId}
           onChange={(e) => setProductId(e.target.value)}
+          style={{ marginRight: 8 }}
         >
           <option value="">Select Product</option>
           {products.map((p) => (

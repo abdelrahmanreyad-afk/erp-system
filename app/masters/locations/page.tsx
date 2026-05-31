@@ -13,18 +13,20 @@ import {
 type Location = {
   id: string;
   name: string;
-  type: "warehouse" | "branch";
+  code: string;
+  type: "branch" | "warehouse";
 };
 
 export default function LocationsPage() {
   const [name, setName] = useState("");
-  const [type, setType] = useState<"warehouse" | "branch">("branch");
+  const [code, setCode] = useState("");
+  const [type, setType] = useState<"branch" | "warehouse">("branch");
 
   const [locations, setLocations] = useState<Location[]>([]);
 
   const locationsRef = collection(db, "locations");
 
-  // 📥 Fetch
+  // 📥 FETCH
   const fetchLocations = async () => {
     const snap = await getDocs(locationsRef);
 
@@ -40,43 +42,54 @@ export default function LocationsPage() {
     fetchLocations();
   }, []);
 
-  // ➕ Add
+  // ➕ CREATE LOCATION
   const addLocation = async () => {
-    if (!name) return;
+    if (!name || !code) return;
 
     await addDoc(locationsRef, {
       name,
+      code,
       type,
       createdAt: new Date(),
     });
 
     setName("");
+    setCode("");
+    setType("branch");
+
     fetchLocations();
   };
 
-  // ❌ Delete
+  // ❌ DELETE
   const deleteLocation = async (id: string) => {
     await deleteDoc(doc(db, "locations", id));
     fetchLocations();
   };
 
   return (
-    <div>
-      <h1>🏢 Master Locations</h1>
+    <div style={{ padding: 20 }}>
+      <h1>📍 Locations</h1>
 
       {/* FORM */}
       <div style={{ marginBottom: 20 }}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Location name"
+          placeholder="Location Name"
+          style={{ marginRight: 10 }}
+        />
+
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Location Code (e.g. CST-01)"
           style={{ marginRight: 10 }}
         />
 
         <select
           value={type}
           onChange={(e) =>
-            setType(e.target.value as "warehouse" | "branch")
+            setType(e.target.value as "branch" | "warehouse")
           }
           style={{ marginRight: 10 }}
         >
@@ -91,7 +104,7 @@ export default function LocationsPage() {
       <ul>
         {locations.map((l) => (
           <li key={l.id}>
-            {l.name} - {l.type}
+            <b>{l.code}</b> - {l.name} ({l.type})
 
             <button
               onClick={() => deleteLocation(l.id)}

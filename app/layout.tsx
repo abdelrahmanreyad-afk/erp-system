@@ -1,5 +1,9 @@
 import "./globals.css";
+import { Geist } from "next/font/google";
 import Sidebar from "@/components/Sidebar";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export default function RootLayout({
   children,
@@ -7,21 +11,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0 }}>
-        <div style={{ display: "flex" }}>
+    <html lang="en" className={cn("dark font-sans", geist.variable)}>
+      <body className={cn(geist.className, "bg-background text-foreground")}>
+        <div className="flex min-h-screen">
           <Sidebar />
-
-          <div
-            style={{
-              flex: 1,
-              padding: 20,
-              background: "#f3f4f6",
-              minHeight: "100vh",
-            }}
-          >
+          <main className="flex-1 p-5">
             {children}
-          </div>
+          </main>
         </div>
       </body>
     </html>

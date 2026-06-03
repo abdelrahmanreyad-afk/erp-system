@@ -17,11 +17,12 @@ interface Props {
 export function SearchableSelect({ options, value, onChange, placeholder = "Select...", className }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const sorted = [...options].sort((a, b) => a.label.localeCompare(b.label));
-  const filtered = search
+  const filtered = search.trim()
     ? sorted.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
     : sorted;
   const selected = options.find((o) => o.value === value);
@@ -37,12 +38,34 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  function handleOpen() {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+
+      setDropdownStyle({
+        position: "fixed",
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      });
+    }
+    setOpen((prev) => !prev);
+    if (open) setSearch("");
+  }
+
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => { setOpen(!open); setSearch(""); }}
+        onClick={handleOpen}
         className="w-full flex items-center justify-between bg-card text-foreground border border-border px-3 py-2 rounded-lg text-sm outline-none hover:border-border/80 transition-colors"
       >
         <span className={selected ? "text-foreground" : "text-muted-foreground"}>
@@ -61,18 +84,20 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
         </div>
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown — fixed position to escape overflow:hidden parents */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-          {/* Search input at top */}
+        <div
+          style={dropdownStyle}
+          className="bg-card border border-border rounded-lg shadow-xl overflow-hidden"
+        >
+          {/* Search */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
             <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <input
-              ref={inputRef}
-              autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
+              onClick={(e) => e.stopPropagation()}
               className="w-full bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground"
               style={{ border: "none", padding: 0 }}
             />
@@ -80,7 +105,6 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
 
           {/* Options */}
           <div className="max-h-52 overflow-y-auto">
-            {/* Clear option */}
             <button
               type="button"
               onClick={() => { onChange(""); setOpen(false); setSearch(""); }}

@@ -1,77 +1,103 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth, canAccessMasters, canAccessStockManager, canAccessPricelists, canAccessUsers, canAccessInventory } from "@/components/AuthContext";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import {
   LayoutDashboard, MapPin, Tag, Grid2X2, Layers,
   Package, Boxes, BarChart3, ArrowLeftRight, Flame,
   Warehouse, ShoppingCart, TrendingUp, Calendar,
-  ChevronDown, Store,
+  ChevronDown, Store, Users, LogOut, DollarSign,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: any };
-type Section = { label: string; icon: any; items: NavItem[] };
-
-const sections: Section[] = [
-  {
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    items: [
-      { href: "/", label: "Overview", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "POS",
-    icon: Store,
-    items: [
-      { href: "/pos", label: "Point of Sale", icon: Store },
-    ],
-  },
-  {
-    label: "Masters",
-    icon: Tag,
-    items: [
-      { href: "/masters/locations", label: "Locations", icon: MapPin },
-      { href: "/masters/brands", label: "Brands", icon: Tag },
-      { href: "/masters/categories", label: "Categories", icon: Grid2X2 },
-      { href: "/masters/lines", label: "Lines", icon: Layers },
-      { href: "/masters/products", label: "Products", icon: Package },
-      { href: "/masters/variants", label: "Variants", icon: Boxes },
-      { href: "/masters/pricelists", label: "Pricelists", icon: Tag },
-    ],
-  },
-  {
-    label: "Inventory",
-    icon: Warehouse,
-    items: [
-      { href: "/inventory/inventories", label: "Inventories", icon: Warehouse },
-      { href: "/inventory/stock", label: "Stock Manager", icon: Boxes },
-      { href: "/inventory/balance", label: "Stock Dashboard", icon: BarChart3 },
-      { href: "/inventory/transfers", label: "Transfers", icon: ArrowLeftRight },
-    ],
-  },
-  {
-    label: "KPIs",
-    icon: TrendingUp,
-    items: [
-      { href: "/kpis", label: "KPIs Overview", icon: TrendingUp },
-    ],
-  },
-  {
-    label: "Schedules",
-    icon: Calendar,
-    items: [
-      { href: "/schedules", label: "Schedules", icon: Calendar },
-    ],
-  },
-];
+type Section = {
+  label: string;
+  icon: any;
+  items: NavItem[];
+  show: boolean;
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useAuth();
+  const role = user?.role;
 
-  // figure out which section is active by default
+  const sections: Section[] = [
+    {
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      show: true,
+      items: [
+        { href: "/", label: "Overview", icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: "POS",
+      icon: Store,
+      show: true,
+      items: [
+        { href: "/pos", label: "Point of Sale", icon: Store },
+      ],
+    },
+    {
+      label: "Masters",
+      icon: Tag,
+      show: !!role && canAccessMasters(role),
+      items: [
+        { href: "/masters/locations", label: "Locations", icon: MapPin },
+        { href: "/masters/brands", label: "Brands", icon: Tag },
+        { href: "/masters/categories", label: "Categories", icon: Grid2X2 },
+        { href: "/masters/lines", label: "Lines", icon: Layers },
+        { href: "/masters/products", label: "Products", icon: Package },
+        { href: "/masters/variants", label: "Variants", icon: Boxes },
+        { href: "/masters/payment-methods", label: "Payment Methods", icon: DollarSign },
+        ...(role && canAccessPricelists(role) ? [{ href: "/masters/pricelists", label: "Pricelists", icon: DollarSign }] : []),
+        
+      ],
+    },
+    {
+      label: "Inventory",
+      icon: Warehouse,
+      show: !!role && canAccessInventory(role),
+      items: [
+        { href: "/inventory/inventories", label: "Inventories", icon: Warehouse },
+        ...(role && canAccessStockManager(role) ? [{ href: "/inventory/stock", label: "Stock Manager", icon: Boxes }] : []),
+        { href: "/inventory/balance", label: "Stock Dashboard", icon: BarChart3 },
+        { href: "/inventory/transfers", label: "Transfers", icon: ArrowLeftRight },
+      ],
+    },
+    {
+      label: "KPIs",
+      icon: TrendingUp,
+      show: true,
+      items: [
+        { href: "/kpis", label: "KPIs Overview", icon: TrendingUp },
+      ],
+    },
+    {
+      label: "Schedules",
+      icon: Calendar,
+      show: true,
+      items: [
+        { href: "/schedules", label: "Schedules", icon: Calendar },
+      ],
+    },
+    {
+      label: "Users",
+      icon: Users,
+      show: !!role && canAccessUsers(role),
+      items: [
+        { href: "/masters/users", label: "Users", icon: Users },
+      ],
+    },
+  ];
+
   function getDefaultOpen() {
     const open: Record<string, boolean> = {};
     sections.forEach((s) => {
@@ -93,26 +119,36 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   }
 
+  async function handleLogout() {
+    await signOut(auth);
+    router.replace("/login");
+  }
+
+  const ROLE_COLORS: Record<string, string> = {
+    admin: "text-purple-400",
+    manager: "text-blue-400",
+    agent: "text-green-400",
+  };
+
   return (
     <aside className="w-64 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col">
       {/* Logo */}
       <div className="p-5 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <Flame className="h-5 w-5 text-orange-500" />
-          <span className="font-semibold text-sidebar-foreground">DIRECT SALES MASTER</span>
+          <span className="font-semibold text-sidebar-foreground">ERP System</span>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {sections.map((section) => {
+        {sections.filter((s) => s.show).map((section) => {
           const isOpen = !!openSections[section.label];
           const SectionIcon = section.icon;
           const hasActiveChild = section.items.some((item) => isActive(item.href));
 
           return (
             <div key={section.label}>
-              {/* Section Header */}
               <button
                 onClick={() => toggleSection(section.label)}
                 className={cn(
@@ -126,15 +162,9 @@ export default function Sidebar() {
                   <SectionIcon className="h-4 w-4 shrink-0" />
                   {section.label}
                 </div>
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 transition-transform duration-200",
-                    isOpen ? "rotate-180" : ""
-                  )}
-                />
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", isOpen && "rotate-180")} />
               </button>
 
-              {/* Section Items */}
               {isOpen && (
                 <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                   {section.items.map((item) => {
@@ -165,11 +195,23 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-medium text-sidebar-accent-foreground">
-            N
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="h-7 w-7 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-medium text-sidebar-accent-foreground shrink-0">
+              {user?.name?.[0]?.toUpperCase() || "?"}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-sidebar-foreground truncate">{user?.name}</p>
+              <p className={cn("text-xs capitalize", role ? ROLE_COLORS[role] : "text-muted-foreground")}>{role}</p>
+            </div>
           </div>
-          <span className="text-sm text-sidebar-foreground/60">Admin</span>
+          <button
+            onClick={handleLogout}
+            className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted/50"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </aside>

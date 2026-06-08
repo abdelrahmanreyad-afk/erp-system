@@ -59,6 +59,12 @@ type Order = {
   type: OrderType;
   transaction_type?: TransactionType;
   original_order_id?: string;
+  old_product?: { variant_id: string; quantity: number; price: number };
+  new_products?: any[];
+  difference?: number;
+  condition?: string;
+  ticket_number?: string;
+  note?: string;
   createdAt: any;
 };
 
@@ -852,7 +858,7 @@ export default function POSPage() {
                     </table>
                   </div>
                 )}
-                {o.new_products?.length > 0 && (
+                {(o.new_products?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-2 px-4">NEW PRODUCT(S)</p>
                     <table className="w-full text-sm">
@@ -867,7 +873,7 @@ export default function POSPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {o.new_products.map((p: any, i: number) => {
+                        {(o.new_products || []).map((p: any, i: number) => {
                           const v = getVariant(p.variant_id);
                           return (
                             <tr key={i} className="border-b border-border/50 bg-green-500/5">

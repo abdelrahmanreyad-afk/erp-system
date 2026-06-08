@@ -217,7 +217,7 @@ function RefundForm({ variants, products, pricelists, priceItems, allOrders, age
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [foundOrder, setFoundOrder] = useState<ExistingOrder | null>(null);
   // selected items: map of variant_id -> { qty, modifiedPrice }
-  const [selectedItems, setSelectedItems] = useState<Record<string, { qty: number; modifiedPrice?: number; showModify: boolean }>>({});
+  const [selectedItems, setSelectedItems] = useState<Record<string, { qty: number; modifiedPrice?: number; showModify: boolean; showExtraDiscount?: boolean; extraDiscount?: number }>>({});
   const [selectAll, setSelectAll] = useState(false);
   const [condition, setCondition] = useState<"sealed" | "defect" | "">("");
   const [ticketNumber, setTicketNumber] = useState("");
@@ -256,7 +256,7 @@ function RefundForm({ variants, products, pricelists, priceItems, allOrders, age
   useEffect(() => {
     if (!foundOrder) return;
     if (selectAll) {
-      const all: Record<string, { qty: number; modifiedPrice?: number; showModify: boolean }> = {};
+      const all: Record<string, { qty: number; modifiedPrice?: number; showModify: boolean; showExtraDiscount?: boolean; extraDiscount?: number }> = {};
       foundOrder.products.forEach((p: OrderProduct) => {
         all[p.variant_id] = { qty: p.quantity, modifiedPrice: undefined, showModify: false };
       });
@@ -990,7 +990,7 @@ export default function POSCreatePage() {
       }
       const original = pls.find((p) => p.isOriginal);
       if (original) setPricelistId(original.id);
-      if (user?.id) setSalesPersonId(user.id);
+      if ((user as any)?.id) setSalesPersonId((user as any).id);
       setLoading(false);
     }
     load();
@@ -1042,7 +1042,7 @@ export default function POSCreatePage() {
   function removePayment(index: number) { setPayments(payments.filter((_, i) => i !== index)); }
 
   function resetForm() {
-    setDate(today); setOrderId(""); setSalesPersonId(user?.id || "");
+    setDate(today); setOrderId(""); setSalesPersonId((user as any)?.id || "");
     setOrderProducts([]); setOrderDiscount(0); setOrderDiscountEnabled(false);
     setPayments([]); setSubPayments([]); setNote(""); setCreateError("");
     const original = pricelists.find((p) => p.isOriginal);

@@ -68,6 +68,32 @@ export default function VariantsPage() {
   const getProduct = (id: string) => products.find((p) => p.id === id);
   const getBrandName = (id: string) => brands.find((b) => b.id === id)?.name || "";
   const getLineName = (id: string) => lines.find((l) => l.id === id)?.name || "";
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
+  const totalPages = Math.max(1, Math.ceil(variants.length / PAGE_SIZE));
+  const paginatedVariants = variants.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  function downloadAll() {
+    const rows = [
+      ["variant_name", "code", "sku", "product_name", "product_code", "brand", "line"],
+      ...variants.map((v) => {
+        const p = products.find((x) => x.id === v.productId);
+        return [
+          v.name, v.code, v.sku || "",
+          p?.name || "", p?.code || "",
+          p?.brandId ? brands.find((b) => b.id === p!.brandId)?.name || "" : "",
+          p?.lineId ? lines.find((l) => l.id === p!.lineId)?.name || "" : "",
+        ];
+      }),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `variants_${new Date().toISOString().split("T")[0]}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
 
   // Check if code already exists
   function isCodeDuplicate(code: string, excludeId?: string) {
@@ -225,6 +251,9 @@ export default function VariantsPage() {
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-2" /> Import CSV
           </Button>
+          <Button variant="outline" onClick={downloadAll} disabled={variants.length === 0}>
+            <Download className="h-4 w-4 mr-2" /> Download All
+          </Button>
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> Add Variant
           </Button>
@@ -233,7 +262,12 @@ export default function VariantsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-muted-foreground">Total: {variants.length} variants</CardTitle>
+          <CardTitle className="text-sm text-muted-foreground flex items-center justify-between">
+            <span>Total: {variants.length} variants</span>
+            {totalPages > 1 && (
+              <span className="text-xs">Page {currentPage} of {totalPages}</span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -253,7 +287,7 @@ export default function VariantsPage() {
                 </tr>
               </thead>
               <tbody>
-                {variants.map((v) => {
+                {paginatedVariants.map((v) => {
                   const p = getProduct(v.productId);
                   return (
                     <tr key={v.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
@@ -280,6 +314,35 @@ export default function VariantsPage() {
                 })}
               </tbody>
             </table>
+          )}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, variants.length)} of {variants.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>«</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>‹</Button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+                  const page = start + i;
+                  return page <= totalPages ? (
+                    <Button
+                      key={page}
+                      variant={page === currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="w-8"
+                    >
+                      {page}
+                    </Button>
+                  ) : null;
+                })}
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>›</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>»</Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

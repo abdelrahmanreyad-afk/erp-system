@@ -21,13 +21,11 @@ import {
 type NavItem = { href: string; label: string; icon: any };
 type Section = { label: string; icon: any; items: NavItem[]; show: boolean };
 
-export default function Sidebar() {
+export default function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (v: boolean) => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
   const role = user?.role;
-
-  const [collapsed, setCollapsed] = useState(true);
 
   const sections: Section[] = [
     {
@@ -134,7 +132,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300",
+        "fixed top-0 left-0 h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 z-40",
         collapsed ? "w-16" : "w-64"
       )}
     >

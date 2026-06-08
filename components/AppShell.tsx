@@ -5,11 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import { Loader2 } from "lucide-react";
+import { useState } from "react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const [collapsed, setCollapsed] = useState(true);
 
   const isLoginPage = pathname === "/login";
 
@@ -38,8 +40,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-5 overflow-auto">{children}</main>
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+      <main
+        className="flex-1 p-5 overflow-auto"
+        style={{ marginLeft: collapsed ? 64 : 256, transition: 'margin-left 300ms cubic-bezier(0.4,0,0.2,1)' }}
+      >
+        {children}
+      </main>
     </div>
   );
 }

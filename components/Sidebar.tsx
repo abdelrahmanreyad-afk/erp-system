@@ -142,7 +142,7 @@ export default function Sidebar({ collapsed, setCollapsed }: { collapsed: boolea
           <span className="font-semibold text-sidebar-foreground">RB-DS Master</span>
         )}
         <button
-          onClick={() => setCollapsed((v) => !v)}
+          onClick={() => setCollapsed(!collapsed)}
           className={cn(
             "text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-muted/50",
             collapsed && "mx-auto"

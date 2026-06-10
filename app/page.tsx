@@ -12,7 +12,7 @@ export type Order = {
   pricelist_id: string; net_amount: number; products?: any[];
   new_products?: any[]; payments?: any[]; order_discount?: number;
   total_discount?: number; createdAt: any; condition?: string;
-  difference?: number; old_product?: any;
+  difference?: number; old_product?: any; original_order_id?: string;
 };
 export type Variant = { id: string; name: string; productId?: string };
 export type Location = { id: string; name: string; type?: string };

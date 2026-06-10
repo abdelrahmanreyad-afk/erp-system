@@ -48,6 +48,13 @@ function generateMonthOptions() {
   return options;
 }
 
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function generateYearOptions() {
+  const now = new Date().getFullYear();
+  return Array.from({ length: 5 }, (_, i) => String(now - 1 + i));
+}
+
 function fmt(n: number) {
   if (n >= 1_000_000) return `${(n/1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n/1_000).toFixed(1)}K`;
@@ -77,6 +84,9 @@ export default function TargetsPage() {
     month: getCurrentMonth(),
     amount: "",
   });
+  // Separate month/year selectors for modal
+  const [formMonth, setFormMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
+  const [formYear, setFormYear] = useState(String(new Date().getFullYear()));
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -125,6 +135,9 @@ export default function TargetsPage() {
 
   function openAdd(locId?: string) {
     setEditTarget(null);
+    const [y, m] = selectedMonth.split("-");
+    setFormMonth(m);
+    setFormYear(y);
     setForm({
       location_id: locId || "",
       target_type: "branch",
@@ -138,6 +151,9 @@ export default function TargetsPage() {
 
   function openEdit(t: TargetDoc) {
     setEditTarget(t);
+    const [y, m] = t.month.split("-");
+    setFormMonth(m);
+    setFormYear(y);
     setForm({
       location_id: t.location_id,
       target_type: t.target_type,
@@ -223,13 +239,23 @@ export default function TargetsPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Set and manage monthly targets per branch and agent</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-44">
-            <SearchableSelect
-              options={generateMonthOptions()}
-              value={selectedMonth}
-              onChange={setSelectedMonth}
-              placeholder="Select month"
-            />
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedMonth.split("-")[1]}
+              onChange={e => setSelectedMonth(`${selectedMonth.split("-")[0]}-${e.target.value}`)}
+              className="px-3 py-2 bg-background border border-border rounded-lg text-sm">
+              {MONTH_NAMES.map((name, i) => (
+                <option key={i} value={String(i+1).padStart(2,"0")}>{name}</option>
+              ))}
+            </select>
+            <select
+              value={selectedMonth.split("-")[0]}
+              onChange={e => setSelectedMonth(`${e.target.value}-${selectedMonth.split("-")[1]}`)}
+              className="px-3 py-2 bg-background border border-border rounded-lg text-sm">
+              {generateYearOptions().map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </div>
           <Button onClick={() => openAdd()}>
             <Plus className="h-4 w-4 mr-2" />Add Target
@@ -290,7 +316,8 @@ export default function TargetsPage() {
                     ) : (
                       <Button size="sm" variant="outline" onClick={() => {
                         setEditTarget(null);
-                        setForm({ location_id: loc.id, target_type: "branch", agent_id: "", month: selectedMonth, amount: "" });
+                        const [y3, m3] = selectedMonth.split("-"); setFormMonth(m3); setFormYear(y3);
+                      setForm({ location_id: loc.id, target_type: "branch", agent_id: "", month: selectedMonth, amount: "" });
                         setFormError("");
                         setModalOpen(true);
                       }}>
@@ -299,6 +326,7 @@ export default function TargetsPage() {
                     )}
                     <Button size="sm" variant="outline" onClick={() => {
                       setEditTarget(null);
+                      const [y4, m4] = selectedMonth.split("-"); setFormMonth(m4); setFormYear(y4);
                       setForm({ location_id: loc.id, target_type: "agent", agent_id: "", month: selectedMonth, amount: "" });
                       setFormError("");
                       setModalOpen(true);
@@ -401,15 +429,31 @@ export default function TargetsPage() {
               </div>
             )}
 
-            {/* Month */}
+            {/* Month + Year */}
             <div className="space-y-1">
               <label className="text-sm text-muted-foreground">Month *</label>
-              <SearchableSelect
-                options={generateMonthOptions()}
-                value={form.month}
-                onChange={v => setForm(f => ({ ...f, month: v }))}
-                placeholder="Select month"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <select value={formMonth}
+                  onChange={e => {
+                    setFormMonth(e.target.value);
+                    setForm(f => ({ ...f, month: `${formYear}-${e.target.value}` }));
+                  }}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm">
+                  {MONTH_NAMES.map((name, i) => (
+                    <option key={i} value={String(i+1).padStart(2,"0")}>{name}</option>
+                  ))}
+                </select>
+                <select value={formYear}
+                  onChange={e => {
+                    setFormYear(e.target.value);
+                    setForm(f => ({ ...f, month: `${e.target.value}-${formMonth}` }));
+                  }}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm">
+                  {generateYearOptions().map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Amount */}

@@ -219,6 +219,7 @@ export default function POSPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -242,6 +243,7 @@ export default function POSPage() {
   const [doneDiscount, setDoneDiscount] = useState(0);
   const [doneDiscountEnabled, setDoneDiscountEnabled] = useState(false);
   const [donePayments, setDonePayments] = useState<PaymentEntry[]>([]);
+  const [doneProducts, setDoneProducts] = useState<Array<{ variant_id: string; quantity: number; unit_price: number; product_discount: number; final_price: number }>>([]);
   const [doneLoading, setDoneLoading] = useState(false);
   const [doneError, setDoneError] = useState("");
 
@@ -540,19 +542,32 @@ export default function POSPage() {
   function openDoneModal(order: Order) {
     setDoneModalOrder(order);
     const original = pricelists.find((p) => p.isOriginal);
-    setDonePricelistId(original?.id || "");
+    const plId = original?.id || "";
+    setDonePricelistId(plId);
     setDoneDiscount(0);
     setDoneDiscountEnabled(false);
     setDonePayments([]);
     setDoneError("");
+    // Init products with qty from order, price from original pricelist
+    setDoneProducts(order.products.map((p) => {
+      const price = plId ? (priceItems.find((i) => i.pricelist_id === plId && i.variant_id === p.variant_id)?.price ?? 0) : 0;
+      return { variant_id: p.variant_id, quantity: p.quantity, unit_price: price, product_discount: 0, final_price: price };
+    }));
   }
 
-  function getDoneNetAmount(order: Order, plId: string, discPct: number, discEnabled: boolean) {
-    const plTotal = order.products.reduce((sum, p) => {
-      const price = getPriceFromPricelist(p.variant_id, plId);
-      return sum + price * p.quantity;
-    }, 0);
+  function getDoneNetAmount(_order: Order, _plId: string, discPct: number, discEnabled: boolean) {
+    const plTotal = doneProducts.reduce((sum, p) => sum + p.final_price * p.quantity, 0);
     return discEnabled ? plTotal * (1 - discPct / 100) : plTotal;
+  }
+
+  function updateDoneProduct(index: number, field: string, value: number) {
+    const updated = [...doneProducts];
+    const row = { ...updated[index], [field]: value };
+    if (field === "unit_price" || field === "product_discount") {
+      row.final_price = row.unit_price * (1 - row.product_discount / 100);
+    }
+    updated[index] = row;
+    setDoneProducts(updated);
   }
 
   async function handleMarkAsDone() {
@@ -566,25 +581,16 @@ export default function POSPage() {
     setDoneLoading(true);
     try {
       const o = doneModalOrder;
-      const plTotal = o.products.reduce((sum, p) => {
-        const price = getPriceFromPricelist(p.variant_id, donePricelistId);
-        return sum + price * p.quantity;
-      }, 0);
+      const plTotal = doneProducts.reduce((sum, p) => sum + p.final_price * p.quantity, 0);
       const originalTotal2 = o.products.reduce((sum, p) => sum + getOriginalPrice(p.variant_id) * p.quantity, 0);
       const netAmt = doneDiscountEnabled ? plTotal * (1 - doneDiscount / 100) : plTotal;
       const totalDisc = originalTotal2 - netAmt;
-
-      const updatedProducts = o.products.map((p) => ({
-        ...p,
-        unit_price: getPriceFromPricelist(p.variant_id, donePricelistId),
-        product_discount: doneDiscountEnabled ? doneDiscount : 0,
-        final_price: getPriceFromPricelist(p.variant_id, donePricelistId) * (1 - (doneDiscountEnabled ? doneDiscount : 0) / 100),
-      }));
+      const updatedProducts = doneProducts;
 
       const batch = writeBatch(db);
 
-      // Deduct stock
-      for (const item of o.products) {
+      // Deduct stock using doneProducts quantities
+      for (const item of doneProducts) {
         const stockSnap = await getDocs(query(
           collection(db, "stock"),
           where("variant_id", "==", item.variant_id),
@@ -696,75 +702,126 @@ export default function POSPage() {
     setPage(1);
   }
 
-  // ── Import Excel ──
-  function downloadExample() {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ["order_id", "date", "salesperson_code", "location_code", "variant_code", "quantity"],
-      ["ORD-0001", "2026-06-04", "USR-001", "LOC-001", "VAR-001", "2"],
-      ["ORD-0001", "2026-06-04", "USR-001", "LOC-001", "VAR-002", "1"],
-      ["ORD-0002", "2026-06-04", "USR-002", "LOC-002", "VAR-003", "5"],
-    ]);
-    const wb2 = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb2, ws, "Import Template");
-    XLSX.writeFile(wb2, "orders_import_template.xlsx");
-  }
-
-  async function handleImportExcel(e: React.ChangeEvent<HTMLInputElement>) {
+  // ── Import CSV ──
+  async function handleImportCSV(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setImportLoading(true); setImportError(""); setImportSuccess("");
+
+    const STATUS_MAP: Record<string, string> = {
+      "sold": "sale", "sale": "sale",
+      "refund": "refund", "replacement": "replacement",
+      "zerocost": "zerocost", "zero cost": "zerocost",
+      "ceo request": "ceo_request", "ceo_request": "ceo_request",
+    };
+
     try {
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer);
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows: any[] = XLSX.utils.sheet_to_json(ws);
-      if (rows.length === 0) throw new Error("Sheet is empty.");
-      const grouped: Record<string, any[]> = {};
-      for (const row of rows) {
-        const oid = String(row["order_id"] || "").trim();
-        if (!oid) continue;
-        if (!grouped[oid]) grouped[oid] = [];
-        grouped[oid].push(row);
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) throw new Error("CSV is empty.");
+
+      // Parse header
+      const header = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/"/g, ""));
+      const colIdx = (name: string) => header.findIndex(h => h === name.toLowerCase());
+
+      const spColIdx    = colIdx("salesperson code");
+      const locColIdx   = colIdx("location code");
+      const dateColIdx  = colIdx("date");
+      const orderColIdx = colIdx("order ref");
+      const statusColIdx= colIdx("status");
+      const nameColIdx  = colIdx("variant name");
+      const codeColIdx  = colIdx("variant code");
+
+      if ([spColIdx, locColIdx, dateColIdx, orderColIdx, statusColIdx, nameColIdx].includes(-1)) {
+        throw new Error("Missing required columns. Expected: Salesperson Code, Location Code, Date, Order Ref, Status, Variant Name");
       }
+
+      // Parse rows
+      const grouped: Record<string, any[]> = {};
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",").map(c => c.trim().replace(/"/g, ""));
+        const status = cols[statusColIdx]?.trim().toLowerCase();
+        const txType = STATUS_MAP[status];
+        if (!txType) continue; // skip unknown statuses
+
+        const orderRef = cols[orderColIdx]?.trim();
+        if (!orderRef) continue;
+
+        if (!grouped[orderRef]) grouped[orderRef] = [];
+        grouped[orderRef].push({ cols, txType });
+      }
+
+      if (Object.keys(grouped).length === 0) throw new Error("No valid rows found.");
+
       const batch = writeBatch(db);
       let count = 0;
       const today2 = new Date().toISOString().split("T")[0];
-      for (const [oid, rowGroup] of Object.entries(grouped)) {
-        const first = rowGroup[0];
-        const spCode = String(first["salesperson_code"] || "").trim().toUpperCase();
-        const sp = agents.find((a) => a.code?.toUpperCase() === spCode);
-        const locCode = String(first["location_code"] || "").trim().toUpperCase();
-        const loc = locations.find((l) => l.code?.toUpperCase() === locCode);
-        const rawDate = first["date"];
+
+      for (const [orderRef, rows] of Object.entries(grouped)) {
+        const first = rows[0];
+        const cols = first.cols;
+        const txType = first.txType;
+
+        // Salesperson
+        const spCode = cols[spColIdx]?.trim().toUpperCase();
+        const sp = agents.find((a) => (a as any).code?.toUpperCase() === spCode || a.name?.toUpperCase() === spCode);
+
+        // Location
+        const locCode = cols[locColIdx]?.trim().toUpperCase();
+        const loc = locations.find((l) => (l as any).code?.toUpperCase() === locCode || l.name?.toUpperCase() === locCode);
+
+        // Date
+        const rawDate = cols[dateColIdx]?.trim();
         let dateStr = today2;
         if (rawDate) {
-          if (typeof rawDate === "number") {
-            const d = XLSX.SSF.parse_date_code(rawDate);
-            dateStr = `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
-          } else { dateStr = String(rawDate).trim(); }
+          const parsed = new Date(rawDate);
+          dateStr = isNaN(parsed.getTime()) ? rawDate : parsed.toISOString().split("T")[0];
         }
-        const draftProducts = rowGroup.map((r) => {
-          const vCode = String(r["variant_code"] || "").trim().toUpperCase();
-          const v = variants.find((v) => v.code?.toUpperCase() === vCode);
-          return { variant_id: v?.id || vCode, quantity: Number(r["quantity"]) || 1, unit_price: 0, product_discount: 0, final_price: 0 };
-        });
-        const orderRef = doc(collection(db, "orders"));
-        batch.set(orderRef, {
-          order_id: oid, date: dateStr,
+
+        // Products — one per row, match by name or code
+        const draftProducts = rows.map(({ cols: c }) => {
+          const varName = c[nameColIdx]?.trim();
+          const varCode = codeColIdx !== -1 ? c[codeColIdx]?.trim().toUpperCase() : "";
+          const v = variants.find((v) =>
+            (varCode && (v as any).code?.toUpperCase() === varCode) ||
+            v.name?.toLowerCase() === varName?.toLowerCase() ||
+            v.name?.toLowerCase().includes(varName?.toLowerCase() || "")
+          );
+          return {
+            variant_id: v?.id || varName || varCode,
+            quantity: 1,
+            unit_price: 0, product_discount: 0, final_price: 0,
+          };
+        }).filter(p => p.variant_id);
+
+        if (draftProducts.length === 0) continue;
+
+        const orderDocRef = doc(collection(db, "orders"));
+        batch.set(orderDocRef, {
+          order_id: orderRef,
+          date: dateStr,
           sales_person_id: sp?.id || spCode,
           location_id: loc?.id || locCode,
-          pricelist_id: "", products: draftProducts,
+          transaction_type: txType,
+          pricelist_id: "",
+          products: draftProducts,
           order_discount: 0, payments: [],
           original_total: 0, pricelist_total: 0, total_discount: 0, net_amount: 0,
-          type: "draft", createdAt: new Date(),
+          type: "draft",
+          createdAt: new Date(),
         });
         count++;
       }
+
       await batch.commit();
       setImportSuccess(`✓ Imported ${count} draft order(s) successfully.`);
       await loadAll();
-    } catch (err: any) { setImportError("Import failed: " + err.message); }
-    finally { setImportLoading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+    } catch (err: any) {
+      setImportError("Import failed: " + err.message);
+    } finally {
+      setImportLoading(false);
+      if (csvInputRef.current) csvInputRef.current.value = "";
+    }
   }
 
   // ── Download XLSX ──
@@ -1236,14 +1293,11 @@ export default function POSPage() {
           <Button variant="outline" onClick={() => setSyncOpen(true)}>
             <RefreshCw className="h-4 w-4 mr-2" /> Sync Sheets
           </Button>
-          <Button variant="outline" onClick={downloadExample}>
-            <FileDown className="h-4 w-4 mr-2" /> Example
-          </Button>
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importLoading}>
+          <Button variant="outline" onClick={() => csvInputRef.current?.click()} disabled={importLoading}>
             {importLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-            Import Excel
+            Import CSV
           </Button>
-          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportExcel} />
+          <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
           <Button variant="outline" onClick={downloadXLSX}>
             <Download className="h-4 w-4 mr-2" /> Download XLSX
           </Button>
@@ -1288,7 +1342,7 @@ export default function POSPage() {
         const netAmt = getDoneNetAmount(doneModalOrder, donePricelistId, doneDiscount, doneDiscountEnabled);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-xl space-y-4 p-6">
+            <div className="bg-card border border-border rounded-2xl w-full max-w-2xl shadow-xl space-y-4 p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Complete Order #{doneModalOrder.order_id}</h2>
                 <button onClick={() => setDoneModalOrder(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
@@ -1296,15 +1350,77 @@ export default function POSPage() {
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4 overflow-y-auto max-h-[70vh]">
+                {/* Pricelist */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pricelist *</label>
                   <SearchableSelect
                     options={[...pricelists].sort((a, b) => a.name.localeCompare(b.name)).map((p) => ({ value: p.id, label: p.name }))}
-                    value={donePricelistId} onChange={setDonePricelistId} placeholder="Select pricelist"
+                    value={donePricelistId}
+                    onChange={(val) => {
+                      setDonePricelistId(val);
+                      setDoneProducts(doneProducts.map((p) => {
+                        const price = priceItems.find((i) => i.pricelist_id === val && i.variant_id === p.variant_id)?.price ?? 0;
+                        return { ...p, unit_price: price, final_price: price * (1 - p.product_discount / 100) };
+                      }));
+                    }}
+                    placeholder="Select pricelist"
                   />
                 </div>
 
+                {/* Products Table */}
+                {doneProducts.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Products</label>
+                    <div className="border border-border rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/30 border-b border-border">
+                            <th className="text-left py-2 px-3">Variant</th>
+                            <th className="text-center py-2 px-2">Qty</th>
+                            <th className="text-center py-2 px-2">Price</th>
+                            <th className="text-center py-2 px-2">Disc%</th>
+                            <th className="text-right py-2 px-3">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {doneProducts.map((p, i) => {
+                            const v = variants.find((v) => v.id === p.variant_id);
+                            const pr = v?.productId ? products.find((pr) => pr.id === v.productId) : undefined;
+                            return (
+                              <tr key={i} className="border-b border-border/50 last:border-0">
+                                <td className="py-2 px-3">
+                                  <p className="font-medium truncate max-w-[120px]">{v?.name || p.variant_id}</p>
+                                  {pr && <p className="text-muted-foreground truncate max-w-[120px]">{pr.name}</p>}
+                                </td>
+                                <td className="py-2 px-2">
+                                  <input type="number" min={1} value={p.quantity}
+                                    onChange={(e) => updateDoneProduct(i, "quantity", Number(e.target.value))}
+                                    style={{ width: 55, textAlign: "center" }} />
+                                </td>
+                                <td className="py-2 px-2">
+                                  <input type="number" min={0} value={p.unit_price}
+                                    onChange={(e) => updateDoneProduct(i, "unit_price", Number(e.target.value))}
+                                    style={{ width: 75, textAlign: "center" }} />
+                                </td>
+                                <td className="py-2 px-2">
+                                  <input type="number" min={0} max={100} value={p.product_discount}
+                                    onChange={(e) => updateDoneProduct(i, "product_discount", Number(e.target.value))}
+                                    style={{ width: 55, textAlign: "center" }} />
+                                </td>
+                                <td className="py-2 px-3 text-right font-medium">
+                                  {(p.final_price * p.quantity).toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Order Discount */}
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium">Order Discount</label>
                   <button
@@ -1322,6 +1438,7 @@ export default function POSPage() {
                   )}
                 </div>
 
+                {/* Payment Methods */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment Methods *</label>
@@ -1360,12 +1477,23 @@ export default function POSPage() {
                   ))}
                 </div>
 
-                {donePricelistId && (
-                  <div className="p-3 bg-muted/30 rounded-lg text-sm flex justify-between">
-                    <span className="text-muted-foreground">Net Amount</span>
-                    <span className="font-semibold">{netAmt.toLocaleString()}</span>
+                {/* Summary */}
+                <div className="p-3 bg-muted/30 rounded-lg space-y-1.5 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span>{doneProducts.reduce((s, p) => s + p.final_price * p.quantity, 0).toLocaleString()}</span>
                   </div>
-                )}
+                  {doneDiscountEnabled && doneDiscount > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Order Discount ({doneDiscount}%)</span>
+                      <span className="text-destructive">-{(doneProducts.reduce((s, p) => s + p.final_price * p.quantity, 0) * doneDiscount / 100).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t border-border pt-1.5">
+                    <span>Net Amount</span>
+                    <span>{netAmt.toLocaleString()}</span>
+                  </div>
+                </div>
 
                 {doneError && <p className="text-destructive text-sm">{doneError}</p>}
               </div>

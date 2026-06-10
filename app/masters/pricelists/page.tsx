@@ -30,6 +30,11 @@ export default function PricelistsPage() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [searchVariant, setSearchVariant] = useState("");
 
+  // Discount state
+  const [discountPct, setDiscountPct] = useState<number>(0);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountBase, setDiscountBase] = useState<"original" | "current">("original");
+
   // Create pricelist dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -111,6 +116,27 @@ export default function PricelistsPage() {
       await batch.commit();
       await loadAll();
     } finally { setSaveLoading(false); }
+  }
+
+  // ── Apply Discount ──
+  function applyDiscount() {
+    if (!selectedPricelist || discountPct <= 0 || discountPct >= 100) return;
+    const original = getOriginal();
+    const newPrices = { ...editedPrices };
+    variants.forEach((v) => {
+      let basePrice = 0;
+      if (discountBase === "original" && original) {
+        basePrice = getPriceForVariant(original.id, v.id);
+      } else {
+        basePrice = editedPrices[v.id] ?? 0;
+      }
+      if (basePrice > 0) {
+        newPrices[v.id] = Math.round(basePrice * (1 - discountPct / 100) * 100) / 100;
+      }
+    });
+    setEditedPrices(newPrices);
+    setDiscountOpen(false);
+    setDiscountPct(0);
   }
 
   // ── Create Pricelist ──
@@ -229,10 +255,15 @@ export default function PricelistsPage() {
               <p className="text-sm text-muted-foreground mt-1">{variants.length} variants</p>
             </div>
           </div>
-          <Button onClick={handleSavePrices} disabled={saveLoading}>
-            {saveLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Prices
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setDiscountOpen(true)} disabled={selectedPricelist?.isOriginal}>
+              <Tag className="h-4 w-4 mr-2" />Apply Discount %
+            </Button>
+            <Button onClick={handleSavePrices} disabled={saveLoading}>
+              {saveLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Prices
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -286,6 +317,60 @@ export default function PricelistsPage() {
             )}
           </CardContent>
         </Card>
+      {/* Discount Modal */}
+      {discountOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm space-y-4 shadow-xl">
+            <h2 className="text-lg font-semibold">Apply Discount %</h2>
+            <p className="text-sm text-muted-foreground">
+              Calculate prices based on a discount from the selected base. <br/>
+              <span className="text-yellow-500 text-xs">⚠ This will update all prices in the table but won&apos;t save until you click Save Prices.</span>
+            </p>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-sm text-muted-foreground">Base Price</label>
+                <div className="flex gap-2">
+                  <button onClick={() => setDiscountBase("original")}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${discountBase === "original" ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground hover:border-border/80"}`}>
+                    Original Pricelist
+                  </button>
+                  <button onClick={() => setDiscountBase("current")}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${discountBase === "current" ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground hover:border-border/80"}`}>
+                    Current Prices
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm text-muted-foreground">Discount %</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min={0} max={99} value={discountPct}
+                    onChange={(e) => setDiscountPct(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                    placeholder="e.g. 10"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+                {discountPct > 0 && discountPct < 100 && (
+                  <p className="text-xs text-green-500">
+                    e.g. price 1000 → {Math.round(1000 * (1 - discountPct / 100))}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => { setDiscountOpen(false); setDiscountPct(0); }}
+                className="flex-1 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Cancel
+              </button>
+              <button onClick={applyDiscount} disabled={discountPct <= 0 || discountPct >= 100}
+                className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40 transition-colors">
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   }

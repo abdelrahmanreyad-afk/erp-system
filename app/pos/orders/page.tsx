@@ -216,6 +216,13 @@ export default function POSPage() {
   const [filterTransactionType, setFilterTransactionType] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+  const [sortKey, setSortKey] = useState<string>("order_id");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function toggleSort(key: string) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  }
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
@@ -692,8 +699,25 @@ export default function POSPage() {
     filterDateFrom || filterDateTo || filterPaymentMethod || filterVariant || filterProduct ||
     filterBrand || filterCategory || filterLine || filterType || filterTransactionType;
 
-  const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE);
-  const paginatedOrders = filteredOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      let va: any, vb: any;
+      if (sortKey === "order_id") { va = a.order_id || ""; vb = b.order_id || ""; return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va); }
+      if (sortKey === "date") { va = a.date || ""; vb = b.date || ""; return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va); }
+      if (sortKey === "createdAt") {
+        const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+        const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        return sortDir === "asc" ? ta.getTime() - tb.getTime() : tb.getTime() - ta.getTime();
+      }
+      if (sortKey === "net_amount") { va = a.net_amount || 0; vb = b.net_amount || 0; return sortDir === "asc" ? va - vb : vb - va; }
+      if (sortKey === "type") { va = a.type || ""; vb = b.type || ""; return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va); }
+      if (sortKey === "transaction_type") { va = a.transaction_type || "sale"; vb = b.transaction_type || "sale"; return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va); }
+      return 0;
+    });
+  }, [filteredOrders, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(sortedOrders.length / PAGE_SIZE);
+  const paginatedOrders = sortedOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function clearFilters() {
     setFilterSearch(""); setFilterLocation(""); setFilterAgent(""); setFilterPricelist("");
@@ -1614,16 +1638,31 @@ export default function POSPage() {
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
                   {deleteMode && <th className="py-3 px-4 w-10"></th>}
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Order ID</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Date</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Created At</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Status</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Transaction</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Sales Person</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Location</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Pricelist</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Items</th>
-                  <th className="text-left py-3 px-4 whitespace-nowrap">Net Amount</th>
+                  {[
+                    { key: "order_id", label: "Order ID" },
+                    { key: "date", label: "Date" },
+                    { key: "createdAt", label: "Created At" },
+                    { key: "type", label: "Status" },
+                    { key: "transaction_type", label: "Transaction" },
+                    { key: null, label: "Sales Person" },
+                    { key: null, label: "Location" },
+                    { key: null, label: "Pricelist" },
+                    { key: null, label: "Items" },
+                    { key: "net_amount", label: "Net Amount" },
+                  ].map(({ key, label }) => (
+                    <th key={label}
+                      className={`text-left py-3 px-4 whitespace-nowrap ${key ? "cursor-pointer hover:text-foreground select-none" : ""}`}
+                      onClick={() => key && toggleSort(key)}>
+                      <div className="flex items-center gap-1">
+                        {label}
+                        {key && (
+                          <span className="text-muted-foreground/50 text-xs">
+                            {sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : " ↕"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  ))}
                   {isAdmin && !deleteMode && <th className="text-right py-3 px-4"></th>}
                   <th className="text-right py-3 px-4"></th>
                 </tr>
@@ -1699,7 +1738,7 @@ export default function POSPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredOrders.length)} of {filteredOrders.length} orders
+            Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, sortedOrders.length)} of {sortedOrders.length} orders
           </p>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(1)} disabled={page === 1}
